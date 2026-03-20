@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BloodBank Pulse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Spline+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="backdrop"></div>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Live availability lookup</p>
+          <h1>BloodBank Pulse</h1>
+          <p class="subtitle">
+            Query blood availability by state, district, and hospital. Fast fallback and clear status so you
+            always know what is happening upstream.
+          </p>
+        </div>
+        <div class="hero-card">
+          <p class="label">API Base</p>
+          <div class="row">
+            <input
+              id="baseUrl"
+              type="url"
+              placeholder="Leave blank to use this server"
+              autocomplete="off"
+            />
+            <button id="useLocal" type="button">Use current</button>
+          </div>
+          <p class="hint">Example: https://prajna-2.onrender.com</p>
+        </div>
+      </header>
+
+      <section class="panel">
+        <form id="queryForm" class="query">
+          <div class="field">
+            <label for="stateCode">State code</label>
+            <input id="stateCode" name="stateCode" placeholder="97" required />
+          </div>
+          <div class="field">
+            <label for="districtCode">District code</label>
+            <input id="districtCode" name="districtCode" placeholder="93" required />
+          </div>
+          <div class="field">
+            <label for="hospitalCode">Hospital code</label>
+            <input id="hospitalCode" name="hospitalCode" placeholder="284128" required />
+          </div>
+          <div class="actions">
+            <button type="submit" id="submitBtn">Fetch availability</button>
+            <button type="button" id="sampleBtn" class="ghost">Use sample</button>
+          </div>
+        </form>
+
+        <div class="status" id="statusBox">
+          <div>
+            <p class="label">Status</p>
+            <p id="statusText" class="value">Waiting for input</p>
+          </div>
+          <div>
+            <p class="label">Response time</p>
+            <p id="timingText" class="value">--</p>
+          </div>
+          <div>
+            <p class="label">Upstream note</p>
+            <p id="messageText" class="value">--</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel results" id="resultsPanel">
+        <div class="result-header">
+          <div>
+            <h2>Hospital snapshot</h2>
+            <p id="hospitalMeta">No data yet</p>
+          </div>
+          <span id="offlineBadge" class="badge">Offline</span>
+        </div>
+
+        <div class="result-grid">
+          <div class="tile">
+            <p class="label">Last updated</p>
+            <p class="value" id="lastUpdated">--</p>
+          </div>
+          <div class="tile">
+            <p class="label">Hospital type</p>
+            <p class="value" id="hospitalType">--</p>
+          </div>
+          <div class="tile">
+            <p class="label">Address</p>
+            <p class="value" id="hospitalAddress">--</p>
+          </div>
+        </div>
+
+        <div class="blood-list" id="bloodList"></div>
+        <p class="footnote">Powered by eRaktKosh availability data.</p>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
