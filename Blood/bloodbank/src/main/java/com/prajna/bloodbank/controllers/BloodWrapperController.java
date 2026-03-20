@@ -36,6 +36,8 @@ public class BloodWrapperController {
         wrapped.put("bloodComponents", data.get("blood"));
         wrapped.put("lastUpdated", data.get("lastUpdated"));
         wrapped.put("offline", data.get("offline"));
+        wrapped.put("status", data.get("status"));
+        wrapped.put("message", data.get("message"));
 
         return List.of(wrapped);
     }

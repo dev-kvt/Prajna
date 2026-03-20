@@ -1,6 +1,8 @@
 package com.prajna.bloodbank.service;
 
 import com.prajna.bloodbank.config.ExternalApiProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
@@ -8,6 +10,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +18,7 @@ import java.util.Map;
 
 @Service
 public class bloodService {
+    private static final Logger log = LoggerFactory.getLogger(bloodService.class);
     private final RestTemplate restTemplate;
     private final ExternalApiProperties apiProperties;
 
@@ -37,38 +41,53 @@ public class bloodService {
                 .queryParam("hospitalCodes", hospital)
                 .toUriString();
 
-        try {
-            List<Map<String, Object>> response = restTemplate.getForObject(url, List.class);
-            if (response == null || response.isEmpty()) {
-                return fallback("Empty response from external API", state, district, hospital);
+        int maxAttempts = Math.max(1, apiProperties.retry().maxAttempts());
+        Duration backoff = apiProperties.retry().backoff();
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                List<Map<String, Object>> response = restTemplate.getForObject(url, List.class);
+                if (response == null || response.isEmpty()) {
+                    return fallback("Empty response from external API", state, district, hospital);
+                }
+
+                Map<String, Object> raw = response.get(0);
+                Map<String, Object> result = new HashMap<>();
+                result.put("status", "ok");
+                result.put("hospital", raw.get("hospitalname"));
+                result.put("lastUpdated", raw.get("entrydate"));
+                result.put("offline", raw.get("offline"));
+
+                // Extract components
+                Map<String, Object> components = (Map<String, Object>) raw.get("components");
+
+                if (components != null && components.containsKey("Packed Red Blood Cells")) {
+                    Map<String, Object> rbc = (Map<String, Object>) components.get("Packed Red Blood Cells");
+
+                    String availableData = (String) rbc.get("available_WithQty");  // Use real stock
+                    result.put("blood", parse(availableData));
+                } else {
+                    result.put("blood", Map.of());
+                }
+
+                return result;
+            } catch (ResourceAccessException ex) {
+                // Typically thrown on connect/read timeouts or DNS/connectivity issues
+                log.warn("External API timeout/unreachable (attempt {}/{}): {}", attempt, maxAttempts, ex.getMessage());
+                if (attempt == maxAttempts) {
+                    return fallback("External API timed out or is unreachable", state, district, hospital);
+                }
+            } catch (RestClientException ex) {
+                log.warn("External API error (attempt {}/{}): {}", attempt, maxAttempts, ex.getMessage());
+                if (attempt == maxAttempts) {
+                    return fallback("External API error", state, district, hospital);
+                }
             }
 
-            Map<String, Object> raw = response.get(0);
-            Map<String, Object> result = new HashMap<>();
-            result.put("status", "ok");
-            result.put("hospital", raw.get("hospitalname"));
-            result.put("lastUpdated", raw.get("entrydate"));
-            result.put("offline", raw.get("offline"));
-
-            // Extract components
-            Map<String, Object> components = (Map<String, Object>) raw.get("components");
-
-            if (components != null && components.containsKey("Packed Red Blood Cells")) {
-                Map<String, Object> rbc = (Map<String, Object>) components.get("Packed Red Blood Cells");
-
-                String availableData = (String) rbc.get("available_WithQty");  // Use real stock
-                result.put("blood", parse(availableData));
-            } else {
-                result.put("blood", Map.of());
-            }
-
-            return result;
-        } catch (ResourceAccessException ex) {
-            // Typically thrown on connect/read timeouts or DNS/connectivity issues
-            return fallback("External API timed out or is unreachable", state, district, hospital);
-        } catch (RestClientException ex) {
-            return fallback("External API error", state, district, hospital);
+            sleepBackoff(backoff);
         }
+
+        return fallback("External API unavailable", state, district, hospital);
     }
 
     private Map<String, Object> fallback(String reason, String state, String district, String hospital) {
@@ -84,6 +103,17 @@ public class bloodService {
         result.put("hospitalCode", hospital);
         result.put("timestamp", Instant.now().toString());
         return result;
+    }
+
+    private void sleepBackoff(Duration backoff) {
+        if (backoff == null || backoff.isZero() || backoff.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(backoff.toMillis());
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private Map<String, Integer> parse(String data) {
